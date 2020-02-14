@@ -1,75 +1,90 @@
-import { BigInt } from "@graphprotocol/graph-ts"
 import {
-  Contract,
-  DAppCreated,
-  Upvote,
-  Downvote,
-  Withdraw,
-  MetadataUpdated,
-  CeilingUpdated
-} from "../generated/Contract/Contract"
-import { ExampleEntity } from "../generated/schema"
+  DAppCreated as DAppCreatedEvent,
+  Discover as DiscoverContract
+} from "../generated/Discover/Discover"
+import {
+  DappMeta,
+  Detail
+} from "../generated/schema"
 
-export function handleDAppCreated(event: DAppCreated): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
+import { 
+  log, 
+  ipfs, 
+  json,
+  TypedMap, 
+  JSONValue, 
+  Bytes, 
+  Value, 
+  BigDecimal,
+  ByteArray,
+  BigInt } from '@graphprotocol/graph-ts'
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (entity == null) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
+import { loadFromIpfs } from "./ipfs";
+import { TransactionInfo, State } from "./transaction";
 
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
-  }
 
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
+export function handleDAppCreated(event: DAppCreatedEvent): void {
+  let contract = DiscoverContract.bind(event.address)
+  let entity = new DappMeta(
+    event.transaction.hash.toHex() + "-" + event.logIndex.toString()
+  )
 
-  // Entity fields can be set based on event parameters
-  entity.id = event.params.id
-  entity.newEffectiveBalance = event.params.newEffectiveBalance
+  let entity2 = new Detail(
+    event.transaction.hash.toHex() + "-" + event.logIndex.toString()
+  )
+  
+  let id = event.params.id
+  let count = contract.getDAppsCount()
+  let dappIdx = contract.id2index(id)
+  let dapp = contract.dapps(dappIdx)
+  let metadata = dapp.value2 // bytes32 representation of ipfs Hash where all metadata is stored
+  
+  let bytes32toHex = metadata.toHexString()
+  let ipfsHashHex = '1220' + bytes32toHex.slice(2)
+  ipfsHashHex = '0x' + ipfsHashHex
 
-  // Entities can be written to the store with `.save()`
+  log.info('Hows everything {} {} {} {} {}', [count.toHexString(), dappIdx.toHexString(), id.toHex(), bytes32toHex, ipfsHashHex])
+  
+  let ipfsHashBytes = Bytes.fromHexString(ipfsHashHex)
+  let ipfsHash = ipfsHashBytes.toBase58()
+  
+  log.info("IPFS HASH: {}", [ipfsHash])
+
+  
+  let tx: TransactionInfo
+  
+  tx.blockNumber = event.block.number.toI32()
+  tx.timestamp = event.block.timestamp.toI32()
+  tx.from = event.transaction.from
+  tx.hash = event.transaction.hash
+  tx.state.ipfsReqs = 0
+  
+  if (ipfsHash != 'QmS6a72GnPvUCMwKKrVGE41yY8RYwVVoBTrEbW6XWDu1EY' && ipfsHash != 'QmfCbEDwZ7sVSzcmivp3WvKd9pcKHhmCXiFwFuuQJmhPhs') {
+    let ipfsData = loadFromIpfs(ipfsHash, tx)
+
+  log.debug("Transaction (Tx): {}", [tx.toString()])
+  log.debug("IPFS DATA is {}", [ipfsData.get("name").toString()])
+  
+  entity2.name = ipfsData.get("name").toString()
+  entity2.url = ipfsData.get("url").toString()
+  entity2.description = ipfsData.get("description").toString()
+  entity2.dateAdded = ipfsData.get("dateAdded").toBigInt()
+  entity2.category = ipfsData.get("category").toString()
+  entity2.uploader = ipfsData.get("uploader").toString()
+  entity2.image = ipfsData.get("image").toString()
+  entity2.identifier = event.transaction.hash.toHex() + "-" + event.logIndex.toString()
+  entity2.save()
+  
+  entity.ipfsHash = ipfsHash
+  entity.hash = event.transaction.hash.toHex()
+  entity.status = "NEW"
   entity.save()
+  }
+  // entity.compressedMetadata = web3Utils.keccak256(
+    // JSON.stringify(metadata),
+  // )
+  // entity.status = "NEW"
 
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.upvoteEffect(...)
-  // - contract.safeMax(...)
-  // - contract.total(...)
-  // - contract.decimals(...)
-  // - contract.existingIDs(...)
-  // - contract.getDAppsCount(...)
-  // - contract.max(...)
-  // - contract.downvoteCost(...)
-  // - contract.ceiling(...)
-  // - contract.dapps(...)
-  // - contract.id2index(...)
-  // - contract.withdrawMax(...)
-  // - contract.controller(...)
+  // entity.id = event.params.id
+  // entity.newEffectiveBalance = event.params.newEffectiveBalance
 }
-
-export function handleUpvote(event: Upvote): void {}
-
-export function handleDownvote(event: Downvote): void {}
-
-export function handleWithdraw(event: Withdraw): void {}
-
-export function handleMetadataUpdated(event: MetadataUpdated): void {}
-
-export function handleCeilingUpdated(event: CeilingUpdated): void {}

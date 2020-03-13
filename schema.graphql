@@ -3,6 +3,7 @@ type DappMeta @entity {
   ipfsHash: String!
   hash: String!
   details: Detail! @derivedFrom(field: "identifier")
+  # email: String!
   status: Status!
 }
 

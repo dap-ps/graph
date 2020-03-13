@@ -9,18 +9,11 @@ import {
 
 import { 
   log, 
-  ipfs, 
-  json,
-  TypedMap, 
-  JSONValue, 
-  Bytes, 
-  Value, 
-  BigDecimal,
-  ByteArray,
-  BigInt } from '@graphprotocol/graph-ts'
+  Bytes } from '@graphprotocol/graph-ts'
 
 import { loadFromIpfs } from "./ipfs";
-import { TransactionInfo, State } from "./transaction";
+import { getNewHash } from "./oldToNewHash";
+import { TransactionInfo } from "./transaction";
 
 
 export function handleDAppCreated(event: DAppCreatedEvent): void {
@@ -58,12 +51,16 @@ export function handleDAppCreated(event: DAppCreatedEvent): void {
   tx.from = event.transaction.from
   tx.hash = event.transaction.hash
   tx.state.ipfsReqs = 0
+
+  // get new hash if the curret ipfsHash legacy hash
+  ipfsHash = getNewHash(ipfsHash)
+
+  log.info("NEW IPFS HASH: {}", [ipfsHash])
   
-  if (ipfsHash != 'QmS6a72GnPvUCMwKKrVGE41yY8RYwVVoBTrEbW6XWDu1EY' && ipfsHash != 'QmfCbEDwZ7sVSzcmivp3WvKd9pcKHhmCXiFwFuuQJmhPhs') {
-    let ipfsData = loadFromIpfs(ipfsHash, tx)
+  let ipfsData = loadFromIpfs(ipfsHash, tx)
 
   log.debug("Transaction (Tx): {}", [tx.toString()])
-  log.debug("IPFS DATA is {}", [ipfsData.get("name").toString()])
+  log.info("IPFS DATA is {}", [ipfsData.get("name").toString()])
   
   entity2.name = ipfsData.get("name").toString()
   entity2.url = ipfsData.get("url").toString()
@@ -79,12 +76,4 @@ export function handleDAppCreated(event: DAppCreatedEvent): void {
   entity.hash = event.transaction.hash.toHex()
   entity.status = "NEW"
   entity.save()
-  }
-  // entity.compressedMetadata = web3Utils.keccak256(
-    // JSON.stringify(metadata),
-  // )
-  // entity.status = "NEW"
-
-  // entity.id = event.params.id
-  // entity.newEffectiveBalance = event.params.newEffectiveBalance
 }
